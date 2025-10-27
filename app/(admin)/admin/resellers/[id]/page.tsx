@@ -27,7 +27,7 @@ async function fetchResellerDetail(resellerId: string) {
     // Fetch orders
     const { data: orders } = await supabase
       .from('orders')
-      .select('id, order_code, total_price, total_weight_kg, status, created_at')
+      .select('id, order_code, total_price, total_weight_kg, status, payment_status, created_at')
       .eq('reseller_id', resellerId)
       .order('created_at', { ascending: false })
       .limit(10)
