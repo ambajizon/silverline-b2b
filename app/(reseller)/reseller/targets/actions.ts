@@ -61,10 +61,10 @@ export async function getResellerTargets(): Promise<ActionResult> {
         }
       })
 
-      return { ok: true, data: transformedTargets }
+      return { ok: true, data: { targets: transformedTargets, resellerId } }
     }
 
-    return { ok: true, data }
+    return { ok: true, data: { targets: data, resellerId } }
   } catch (error: any) {
     return { ok: false, error: error.message || 'Failed to fetch targets' }
   }

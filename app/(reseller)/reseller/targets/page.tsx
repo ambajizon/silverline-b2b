@@ -1,5 +1,5 @@
 import { getResellerTargets } from './actions'
-import ResellerTargetsView from '@/components/reseller/ResellerTargetsView'
+import ResellerTargets from '@/components/admin/resellers/ResellerTargets'
 
 export default async function ResellerTargetsPage() {
   const result = await getResellerTargets()
@@ -14,7 +14,7 @@ export default async function ResellerTargetsPage() {
     )
   }
 
-  const targets = result.data || []
+  const { targets = [], resellerId = '' } = result.data || {}
 
   return (
     <div className="space-y-6">
@@ -25,7 +25,7 @@ export default async function ResellerTargetsPage() {
         </p>
       </div>
 
-      <ResellerTargetsView targets={targets} />
+      <ResellerTargets targets={targets} resellerId={resellerId} />
     </div>
   )
 }
