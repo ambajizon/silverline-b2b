@@ -433,6 +433,10 @@ export async function placeOrder(params: {
     .eq('id', resellerId)
     .single()
 
+  if (!reseller) {
+    throw new Error('Reseller not found')
+  }
+
   // Validate all items
   const productIds = params.items.map(i => i.productId)
   const { data: products } = await supabase
