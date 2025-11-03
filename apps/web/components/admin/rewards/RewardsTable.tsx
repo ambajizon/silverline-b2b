@@ -60,12 +60,11 @@ export default function RewardsTable({ rewards }: { rewards: Reward[] }) {
     }
   }
 
-  const handleMarkDelivered = async (claimId: string) => {
-    const trackingNumber = prompt('Enter tracking number (optional):')
-    const deliveryNotes = prompt('Enter delivery notes (optional):')
+  const handleDeliver = async (claimId: string) => {
+    if (!confirm('Mark reward as delivered?')) return
     
     setLoading(claimId)
-    const result = await markRewardDelivered(claimId, trackingNumber || undefined, deliveryNotes || undefined)
+    const result = await markRewardDelivered(claimId)
     setLoading(null)
 
     if (result.ok) {
@@ -151,7 +150,7 @@ export default function RewardsTable({ rewards }: { rewards: Reward[] }) {
                   )}
                   {reward.status === 'approved' && (
                     <button
-                      onClick={() => handleMarkDelivered(reward.claim_id)}
+                      onClick={() => handleDeliver(reward.claim_id)}
                       disabled={loading === reward.claim_id}
                       className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-50"
                     >
