@@ -19,11 +19,11 @@ export default function TopProducts({ products }: TopProductsProps) {
                   <span className="text-slate-900 font-medium">{p.name}</span>
                   <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded-full font-medium">Best Seller</span>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">{p.units} orders | {p.lines_count} line items</p>
+                <p className="text-xs text-slate-500 mt-0.5">{p.lines_count} order{p.lines_count !== 1 ? 's' : ''}</p>
               </div>
               <div className="text-right">
                 <p className="text-lg font-bold text-slate-900">{p.units}</p>
-                <p className="text-xs text-slate-500">units</p>
+                <p className="text-xs text-slate-500">kg sold</p>
               </div>
             </div>
           ))}

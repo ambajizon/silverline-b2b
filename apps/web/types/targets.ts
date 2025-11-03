@@ -1,5 +1,5 @@
-export type TargetStatus = 'active' | 'completed' | 'expired' | 'suspended'
-export type TargetType = 'weight' // Only weight-based (kg) targets
+export type TargetStatus = 'active' | 'in_progress' | 'completed' | 'expired' | 'suspended'
+export type TargetType = 'weight' | 'purchase_value' | 'revenue' | 'order_count' | 'category_specific'
 
 export interface Target {
   id: string
@@ -18,6 +18,8 @@ export interface Target {
 }
 
 export interface TargetWithProgress extends Target {
+  reward_type?: 'cash' | 'gift' | 'none' | 'cashback'
+  reward_value?: number | string
   reseller_name?: string
   current_progress: number
   progress_percentage: number
@@ -35,6 +37,8 @@ export interface TargetProgress {
 }
 
 export interface TargetDetail extends Target {
+  reward_type?: 'cash' | 'gift' | 'none' | 'cashback'
+  reward_value?: number | string
   reseller_name?: string
   reseller_email?: string
   current_progress: number
@@ -73,6 +77,8 @@ export interface CreateTargetInput {
   terms?: string
   notes?: string
   gift?: string // Gift description text
+  reward_type?: 'cash' | 'gift' | 'none'
+  reward_value?: number | string
   open_participation?: boolean
 }
 

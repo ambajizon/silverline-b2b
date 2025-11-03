@@ -1,9 +1,9 @@
 'use client'
 
 import { PaymentWithDetails } from '@/types/payments'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Eye, Download, Printer } from 'lucide-react'
+import { Eye, Download, Printer, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import RecordPaymentModal from './RecordPaymentModal'
 
 interface PaymentsTableProps {
@@ -19,11 +19,16 @@ const statusColors: Record<string, string> = {
   partial: 'bg-blue-100 text-blue-700',
 }
 
+type SortField = 'invoiced' | 'received' | 'outstanding' | null
+type SortDirection = 'asc' | 'desc'
+
 export default function PaymentsTable({ payments, total, currentPage }: PaymentsTableProps) {
   const router = useRouter()
   const perPage = 20
   const totalPages = Math.ceil(total / perPage)
   const [selectedPayment, setSelectedPayment] = useState<PaymentWithDetails | null>(null)
+  const [sortField, setSortField] = useState<SortField>('outstanding')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -37,6 +42,37 @@ export default function PaymentsTable({ payments, total, currentPage }: Payments
     const params = new URLSearchParams(window.location.search)
     params.set('page', page.toString())
     router.push(`/admin/payments?${params.toString()}`)
+  }
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('desc')
+    }
+  }
+
+  const sortedPayments = useMemo(() => {
+    if (!sortField) return payments
+
+    return [...payments].sort((a, b) => {
+      const aVal = a[sortField] || 0
+      const bVal = b[sortField] || 0
+      
+      if (sortDirection === 'asc') {
+        return aVal - bVal
+      } else {
+        return bVal - aVal
+      }
+    })
+  }, [payments, sortField, sortDirection])
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 text-slate-400" />
+    return sortDirection === 'asc' 
+      ? <ArrowUp className="h-3 w-3 text-blue-600" />
+      : <ArrowDown className="h-3 w-3 text-blue-600" />
   }
 
   if (payments.length === 0) {
@@ -62,15 +98,39 @@ export default function PaymentsTable({ payments, total, currentPage }: Payments
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="text-left py-3 px-4 text-xs font-medium text-slate-700 uppercase">Reseller Name</th>
-                <th className="text-center py-3 px-4 text-xs font-medium text-slate-700 uppercase">Total Invoiced</th>
-                <th className="text-center py-3 px-4 text-xs font-medium text-slate-700 uppercase">Total Received</th>
-                <th className="text-center py-3 px-4 text-xs font-medium text-slate-700 uppercase">Outstanding</th>
+                <th className="text-center py-3 px-4 text-xs font-medium text-slate-700 uppercase">
+                  <button 
+                    onClick={() => handleSort('invoiced')}
+                    className="flex items-center justify-center gap-1 mx-auto hover:text-blue-600"
+                  >
+                    Total Invoiced
+                    <SortIcon field="invoiced" />
+                  </button>
+                </th>
+                <th className="text-center py-3 px-4 text-xs font-medium text-slate-700 uppercase">
+                  <button 
+                    onClick={() => handleSort('received')}
+                    className="flex items-center justify-center gap-1 mx-auto hover:text-blue-600"
+                  >
+                    Total Received
+                    <SortIcon field="received" />
+                  </button>
+                </th>
+                <th className="text-center py-3 px-4 text-xs font-medium text-slate-700 uppercase">
+                  <button 
+                    onClick={() => handleSort('outstanding')}
+                    className="flex items-center justify-center gap-1 mx-auto hover:text-blue-600"
+                  >
+                    Outstanding
+                    <SortIcon field="outstanding" />
+                  </button>
+                </th>
                 <th className="text-center py-3 px-4 text-xs font-medium text-slate-700 uppercase">Status</th>
                 <th className="text-center py-3 px-4 text-xs font-medium text-slate-700 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {payments.map((payment) => (
+              {sortedPayments.map((payment) => (
                 <tr key={payment.reseller_id} className="hover:bg-slate-50">
                   <td className="py-3 px-4 text-sm font-medium text-slate-900">
                     {payment.reseller_name}

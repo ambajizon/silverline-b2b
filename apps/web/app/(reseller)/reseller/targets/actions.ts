@@ -29,42 +29,76 @@ export async function getResellerTargets(): Promise<ActionResult> {
     const { authorized, supabase, resellerId } = await getResellerUser()
     if (!authorized || !resellerId) return { ok: false, error: 'Unauthorized' }
 
-    // Try RPC first
-    const { data, error } = await supabase.rpc('get_reseller_targets', {
-      p_reseller_id: resellerId,
-    })
+    // Get all targets for this reseller with reward status
+    const { data: targets } = await supabase
+      .from('targets')
+      .select(`
+        *,
+        reward_status,
+        reward_approved_date,
+        reward_delivered_date
+      `)
+      .eq('reseller_id', resellerId)
+      .in('status', ['active'])
+      .order('deadline', { ascending: true })
 
-    if (error) {
-      // Fallback to direct query
-      const { data: targets } = await supabase
-        .from('targets')
-        .select(`
-          *,
-          target_progress(current_value)
-        `)
-        .or(`reseller_id.eq.${resellerId},open_participation.eq.true`)
-        .in('status', ['active', 'in_progress'])
-        .order('deadline', { ascending: true })
+    if (!targets) throw new Error('Failed to fetch targets')
 
-      if (!targets) throw new Error('Failed to fetch targets')
-
-      const transformedTargets = targets.map((t: any) => {
-        const currentProgress = t.target_progress?.reduce(
-          (sum: number, p: any) => sum + (p.current_value || 0),
-          0
-        ) || 0
+    // Calculate progress for each target (payment-aware)
+    const transformedTargets = await Promise.all(
+      targets.map(async (t: any) => {
+        let currentProgress = 0
+        
+        // Get ALL delivered orders for this reseller (not just within target period)
+        // This ensures we count all qualified orders
+        const { data: deliveredOrders } = await supabase
+          .from('orders')
+          .select('id, total_weight_kg, total_price, created_at')
+          .eq('reseller_id', resellerId)
+          .eq('status', 'delivered')
+        
+        if (deliveredOrders && deliveredOrders.length > 0) {
+          // Check reseller's overall outstanding
+          const { data: outstandingData } = await supabase
+            .from('v_reseller_outstanding')
+            .select('outstanding')
+            .eq('reseller_id', resellerId)
+            .maybeSingle()
+          
+          const resellerOutstanding = Number(outstandingData?.outstanding || 0)
+          
+          // Filter orders within target period
+          const ordersInPeriod = deliveredOrders.filter((order: any) => {
+            const orderDate = new Date(order.created_at)
+            const targetStart = new Date(t.created_at)
+            const targetEnd = new Date(t.deadline)
+            const inPeriod = orderDate >= targetStart && orderDate <= targetEnd
+            
+            return inPeriod
+          })
+          
+          // If no outstanding, count all delivered orders in period
+          if (resellerOutstanding <= 0 && ordersInPeriod.length > 0) {
+            if (t.type === 'weight') {
+              currentProgress = ordersInPeriod.reduce((sum: number, o: any) => sum + Number(o.total_weight_kg || 0), 0)
+            } else if (t.type === 'purchase_value' || t.type === 'revenue') {
+              currentProgress = ordersInPeriod.reduce((sum: number, o: any) => sum + Number(o.total_price || 0), 0)
+            } else if (t.type === 'order_count') {
+              currentProgress = ordersInPeriod.length
+            }
+          }
+        }
+        
         return {
           ...t,
           current_progress: currentProgress,
-          progress_percentage: Math.min(100, (currentProgress / t.goal) * 100),
+          progress_percentage: Math.min(100, Math.round((currentProgress / t.goal) * 100)),
           is_qualified: currentProgress >= t.goal,
         }
       })
+    )
 
-      return { ok: true, data: { targets: transformedTargets, resellerId } }
-    }
-
-    return { ok: true, data: { targets: data, resellerId } }
+    return { ok: true, data: { targets: transformedTargets, resellerId } }
   } catch (error: any) {
     return { ok: false, error: error.message || 'Failed to fetch targets' }
   }

@@ -181,7 +181,7 @@ export default function TargetsTable({ targets, total, currentPage }: TargetsTab
                 <td className="py-3 px-4 text-center text-sm text-slate-900">
                   {target.reward_value
                     ? target.reward_type === 'cashback'
-                      ? formatCurrency(target.reward_value)
+                      ? formatCurrency(Number(target.reward_value))
                       : `${target.reward_value}%`
                     : '—'}
                 </td>

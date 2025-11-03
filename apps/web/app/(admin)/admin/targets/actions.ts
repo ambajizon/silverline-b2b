@@ -96,13 +96,79 @@ async function getTargetsDirectQuery(supabase: any, filters: TargetFilters) {
     roi: 0,
   }
 
-  // Transform targets
-  const transformedTargets = (targets || []).map((t: any) => ({
-    ...t,
-    reseller_name: t.resellers?.shop_name || 'Open to all',
-    current_progress: t.target_progress?.[0]?.current_value || 0,
-    progress_percentage: Math.min(100, ((t.target_progress?.[0]?.current_value || 0) / t.goal) * 100),
-    is_qualified: (t.target_progress?.[0]?.current_value || 0) >= t.goal,
+  // Calculate progress from orders for each target (only fully paid delivered orders)
+  const transformedTargets = await Promise.all((targets || []).map(async (t: any) => {
+    let currentProgress = 0
+    
+    if (t.reseller_id) {
+      // Get all delivered orders within target period
+      const { data: deliveredOrders } = await supabase
+        .from('orders')
+        .select('id, total_weight_kg, total_price')
+        .eq('reseller_id', t.reseller_id)
+        .eq('status', 'delivered')
+        .gte('created_at', t.created_at)
+        .lte('created_at', t.deadline)
+      
+      if (deliveredOrders && deliveredOrders.length > 0) {
+        // Check reseller's overall outstanding balance first
+        const { data: outstandingData } = await supabase
+          .from('v_reseller_outstanding')
+          .select('outstanding')
+          .eq('reseller_id', t.reseller_id)
+          .maybeSingle()
+        
+        const resellerOutstanding = Number(outstandingData?.outstanding || 0)
+        
+        // If reseller has no outstanding (or is overpaid), count all delivered orders
+        if (resellerOutstanding <= 0) {
+          if (t.type === 'weight') {
+            currentProgress = deliveredOrders.reduce((sum: number, o: any) => sum + Number(o.total_weight_kg || 0), 0)
+          } else if (t.type === 'purchase_value' || t.type === 'revenue') {
+            currentProgress = deliveredOrders.reduce((sum: number, o: any) => sum + Number(o.total_price || 0), 0)
+          } else if (t.type === 'order_count') {
+            currentProgress = deliveredOrders.length
+          }
+        } else {
+          // If there's outstanding, check individual order payments (if linked)
+          const paidOrders = await Promise.all(
+            deliveredOrders.map(async (order: any) => {
+              const { data: payments } = await supabase
+                .from('payments')
+                .select('status, amount')
+                .eq('reseller_id', t.reseller_id)
+                .eq('order_id', order.id)
+              
+              const totalPaid = payments
+                ?.filter((p: any) => p.status === 'received')
+                .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0) || 0
+              const orderTotal = Number(order.total_price || 0)
+              
+              // Only count if fully paid
+              return totalPaid >= orderTotal ? order : null
+            })
+          )
+          
+          const qualifiedOrders = paidOrders.filter(o => o !== null)
+          
+          if (t.type === 'weight') {
+            currentProgress = qualifiedOrders.reduce((sum, o) => sum + Number(o!.total_weight_kg || 0), 0)
+          } else if (t.type === 'purchase_value' || t.type === 'revenue') {
+            currentProgress = qualifiedOrders.reduce((sum, o) => sum + Number(o!.total_price || 0), 0)
+          } else if (t.type === 'order_count') {
+            currentProgress = qualifiedOrders.length
+          }
+        }
+      }
+    }
+    
+    return {
+      ...t,
+      reseller_name: t.resellers?.shop_name || 'Open to all',
+      current_progress: currentProgress,
+      progress_percentage: Math.min(100, (currentProgress / t.goal) * 100),
+      is_qualified: currentProgress >= t.goal,
+    }
   }))
 
   return {
@@ -139,8 +205,70 @@ export async function getTargetDetail(targetId: string): Promise<ActionResult> {
 
       if (!target) throw new Error('Target not found')
 
+      // Calculate progress from actual orders (only fully paid delivered orders count)
+      let currentProgress = 0
+      
+      // Get all delivered orders within target period
+      const { data: deliveredOrders } = await supabase
+        .from('orders')
+        .select('id, total_weight_kg, total_price')
+        .eq('reseller_id', target.reseller_id)
+        .eq('status', 'delivered')
+        .gte('created_at', target.created_at)
+        .lte('created_at', target.deadline)
+      
+      if (deliveredOrders && deliveredOrders.length > 0) {
+        // Check reseller's overall outstanding balance first
+        const { data: outstandingData } = await supabase
+          .from('v_reseller_outstanding')
+          .select('outstanding')
+          .eq('reseller_id', target.reseller_id)
+          .maybeSingle()
+        
+        const resellerOutstanding = Number(outstandingData?.outstanding || 0)
+        
+        // If reseller has no outstanding (or is overpaid), count all delivered orders
+        if (resellerOutstanding <= 0) {
+          if (target.type === 'weight') {
+            currentProgress = deliveredOrders.reduce((sum: number, o: any) => sum + Number(o.total_weight_kg || 0), 0)
+          } else if (target.type === 'purchase_value' || target.type === 'revenue') {
+            currentProgress = deliveredOrders.reduce((sum: number, o: any) => sum + Number(o.total_price || 0), 0)
+          } else if (target.type === 'order_count') {
+            currentProgress = deliveredOrders.length
+          }
+        } else {
+          // If there's outstanding, check individual order payments (if linked)
+          const paidOrders = await Promise.all(
+            deliveredOrders.map(async (order: any) => {
+              const { data: payments } = await supabase
+                .from('payments')
+                .select('status, amount')
+                .eq('reseller_id', target.reseller_id)
+                .eq('order_id', order.id)
+              
+              const totalPaid = payments
+                ?.filter((p: any) => p.status === 'received')
+                .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0) || 0
+              const orderTotal = Number(order.total_price || 0)
+              
+              // Only count if fully paid
+              return totalPaid >= orderTotal ? order : null
+            })
+          )
+          
+          const qualifiedOrders = paidOrders.filter(o => o !== null)
+          
+          if (target.type === 'weight') {
+            currentProgress = qualifiedOrders.reduce((sum, o) => sum + Number(o!.total_weight_kg || 0), 0)
+          } else if (target.type === 'purchase_value' || target.type === 'revenue') {
+            currentProgress = qualifiedOrders.reduce((sum, o) => sum + Number(o!.total_price || 0), 0)
+          } else if (target.type === 'order_count') {
+            currentProgress = qualifiedOrders.length
+          }
+        }
+      }
+
       const progressHistory = target.target_progress || []
-      const currentProgress = progressHistory.reduce((sum: number, p: any) => sum + (p.delta_value || 0), 0)
 
       return {
         ok: true,

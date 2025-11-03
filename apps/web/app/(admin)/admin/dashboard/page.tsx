@@ -23,7 +23,6 @@ async function fetchDashboardData() {
       pipelineRes,
       topResellersRes,
       topProductsRes,
-      paymentsRes,
     ] = await Promise.all([
       // Total orders, revenue, active resellers (exclude admin), resellers added this month, products in stock
       Promise.all([
@@ -37,33 +36,26 @@ async function fetchDashboardData() {
       supabase.rpc('get_current_silver_rate'),
       // Order pipeline
       supabase.from('orders').select('status'),
-      // Top resellers (exclude admin)
-      supabase.rpc('get_top_resellers').then(res => {
-        if (res.error) {
-          // Fallback manual query (exclude admin)
-          return supabase
-            .from('resellers')
-            .select('id, shop_name, user_id, profiles!inner(role)')
-            .eq('status', 'approved')
-            .neq('profiles.role', 'admin')
-            .limit(3)
-        }
-        return res
-      }),
-      // Top products
-      supabase.rpc('get_top_products').then(res => {
-        if (res.error) {
-          // Fallback manual query
-          return supabase
-            .from('products')
-            .select('id, name')
-            .eq('status', 'active')
-            .limit(3)
-        }
-        return res
-      }),
-      // Payments summary
-      supabase.from('payments').select('status, amount'),
+      // Top resellers by revenue (exclude admin)
+      supabase
+        .from('resellers')
+        .select(`
+          id, 
+          shop_name,
+          orders(total_price, status)
+        `)
+        .eq('status', 'approved')
+        .limit(10),
+      // Top products by order frequency
+      supabase
+        .from('products')
+        .select(`
+          id,
+          name,
+          order_items(quantity, orders(status))
+        `)
+        .eq('status', 'active')
+        .limit(10),
     ])
 
     // Process metrics
@@ -85,52 +77,175 @@ async function fetchDashboardData() {
     const pipeline: OrderPipelineStatus = {
       pending: pipelineData.filter((o: any) => o.status === 'pending').length,
       accepted: pipelineData.filter((o: any) => o.status === 'accepted').length,
-      making: pipelineData.filter((o: any) => o.status === 'making' || o.status === 'processing').length,
-      shipped: pipelineData.filter((o: any) => o.status === 'shipped' || o.status === 'dispatched').length,
+      making: pipelineData.filter((o: any) => o.status === 'in_making').length,
+      shipped: pipelineData.filter((o: any) => o.status === 'dispatched').length,
       delivered: pipelineData.filter((o: any) => o.status === 'delivered').length,
-      cancelled: pipelineData.filter((o: any) => o.status === 'cancelled').length,
+      cancelled: pipelineData.filter((o: any) => o.status === 'cancelled' || o.status === 'rejected').length,
     }
 
-    // Process top resellers (with fallback calculation)
+    // Process top resellers (calculate from orders)
     let topResellers: TopReseller[] = []
-    if (topResellersRes.data && Array.isArray(topResellersRes.data) && topResellersRes.data.length > 0) {
-      topResellers = topResellersRes.data.map((r: any) => ({
-        id: r.id,
-        shop_name: r.shop_name,
-        orders_count: Number(r.orders_count || 0),
-        revenue: Number(r.revenue || 0),
-      }))
+    if (topResellersRes.data && Array.isArray(topResellersRes.data)) {
+      const resellersWithStats = topResellersRes.data.map((r: any) => {
+        const deliveredOrders = r.orders?.filter((o: any) => o.status === 'delivered') || []
+        const revenue = deliveredOrders.reduce((sum: number, o: any) => sum + Number(o.total_price || 0), 0)
+        const ordersCount = deliveredOrders.length
+        
+        return {
+          id: r.id,
+          shop_name: r.shop_name,
+          orders_count: ordersCount,
+          revenue: revenue,
+        }
+      })
+      
+      // Sort by revenue and take top 3
+      topResellers = resellersWithStats
+        .filter(r => r.revenue > 0)
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 3)
     }
 
-    // Process top products
+    // Process top products (calculate from order items in delivered orders)
+    // Get all delivered order IDs first
+    const { data: deliveredOrders } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('status', 'delivered')
+    
     let topProducts: TopProduct[] = []
-    if (topProductsRes.data && Array.isArray(topProductsRes.data) && topProductsRes.data.length > 0) {
-      topProducts = topProductsRes.data.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        lines_count: Number(p.lines_count || 0),
-        units: Number(p.units || 0),
-      }))
+    
+    if (deliveredOrders && deliveredOrders.length > 0) {
+      const orderIds = deliveredOrders.map(o => o.id)
+      
+      // Get order items for these orders (using weight_kg instead of quantity)
+      const { data: items } = await supabase
+        .from('order_items')
+        .select('product_id, product_name, weight_kg, item_total')
+        .in('order_id', orderIds)
+      
+      
+      if (items && items.length > 0) {
+        // Group by product and sum weight_kg (units)
+        const productStats = new Map<string, { 
+          id: string
+          name: string
+          weight: number  // Total weight in kg
+          lines: number   // Number of order lines
+          revenue: number // Total revenue
+        }>()
+        
+        items.forEach((item: any) => {
+          if (item.product_id) {
+            const existing = productStats.get(item.product_id)
+            const weight = Number(item.weight_kg || 0)
+            const revenue = Number(item.item_total || 0)
+            
+            if (existing) {
+              existing.weight += weight
+              existing.lines += 1
+              existing.revenue += revenue
+            } else {
+              productStats.set(item.product_id, {
+                id: item.product_id,
+                name: item.product_name || 'Unknown Product',
+                weight: weight,
+                lines: 1,
+                revenue: revenue,
+              })
+            }
+          }
+        })
+        
+        // Sort by weight (most weight sold = top product) and take top 3
+        topProducts = Array.from(productStats.values())
+          .sort((a, b) => b.weight - a.weight)
+          .slice(0, 3)
+          .map(p => ({
+            id: p.id,
+            name: p.name,
+            lines_count: p.lines,
+            units: Math.round(p.weight * 100) / 100, // Round weight to 2 decimals
+          }))
+      }
     }
 
-    // Process payments
-    const paymentsData = paymentsRes.data || []
+    // Process payments (from v_reseller_outstanding view to match payment section)
+    const { data: outstandingData } = await supabase.from('v_reseller_outstanding').select('*')
+    
     const paymentsSummary: PaymentsSummaryType = {
-      received: paymentsData.filter((p: any) => p.status === 'received').reduce((sum, p) => sum + Number(p.amount || 0), 0),
-      pending: paymentsData.filter((p: any) => p.status === 'pending').reduce((sum, p) => sum + Number(p.amount || 0), 0),
-      overdue: paymentsData.filter((p: any) => p.status === 'overdue').reduce((sum, p) => sum + Number(p.amount || 0), 0),
+      received: outstandingData?.reduce((sum: number, r: any) => sum + Number(r.received || 0), 0) || 0,
+      pending: outstandingData?.reduce((sum: number, r: any) => {
+        const outstanding = Number(r.outstanding || 0)
+        return outstanding > 0 ? sum + outstanding : sum
+      }, 0) || 0,
+      overdue: 0, // We don't track overdue separately in current implementation
     }
 
-    // Mock target data (TODO: Replace with actual targets query)
+    // Fetch actual target data
+    const { data: activeTargets } = await supabase
+      .from('targets')
+      .select('id, reseller_id, goal, type, created_at, deadline, resellers(shop_name)')
+      .eq('status', 'active')
+      .order('deadline', { ascending: true })
+      .limit(10)
+
+    // Calculate progress for each active target
+    const targetsWithProgress = await Promise.all(
+      (activeTargets || []).map(async (t: any) => {
+        let currentProgress = 0
+        
+        if (t.reseller_id) {
+          const { data: deliveredOrders } = await supabase
+            .from('orders')
+            .select('id, total_weight_kg, total_price')
+            .eq('reseller_id', t.reseller_id)
+            .eq('status', 'delivered')
+            .gte('created_at', t.created_at)
+            .lte('created_at', t.deadline)
+          
+          if (deliveredOrders && deliveredOrders.length > 0) {
+            const { data: outstandingData } = await supabase
+              .from('v_reseller_outstanding')
+              .select('outstanding')
+              .eq('reseller_id', t.reseller_id)
+              .maybeSingle()
+            
+            const resellerOutstanding = Number(outstandingData?.outstanding || 0)
+            
+            if (resellerOutstanding <= 0) {
+              if (t.type === 'weight') {
+                currentProgress = deliveredOrders.reduce((sum: number, o: any) => sum + Number(o.total_weight_kg || 0), 0)
+              } else if (t.type === 'purchase_value' || t.type === 'revenue') {
+                currentProgress = deliveredOrders.reduce((sum: number, o: any) => sum + Number(o.total_price || 0), 0)
+              } else if (t.type === 'order_count') {
+                currentProgress = deliveredOrders.length
+              }
+            }
+          }
+        }
+        
+        const percentage = t.goal > 0 ? Math.min(100, Math.round((currentProgress / t.goal) * 100)) : 0
+        
+        return {
+          targetId: t.id,  // Add unique target ID
+          resellerId: t.reseller_id,
+          resellerName: t.resellers?.shop_name || 'Unknown',
+          targetAmount: t.goal,
+          achievedAmount: currentProgress,
+          percentage,
+        }
+      })
+    )
+
+    // Calculate overall percentage (average of all active targets)
+    const overallPercentage = targetsWithProgress.length > 0
+      ? Math.round(targetsWithProgress.reduce((sum, t) => sum + t.percentage, 0) / targetsWithProgress.length)
+      : 0
+
     const targetSummary: TargetSummary = {
-      overallPercentage: 50,
-      topPerformers: topResellers.slice(0, 2).map((r, idx) => ({
-        resellerId: r.id,
-        resellerName: r.shop_name,
-        targetAmount: 100000,
-        achievedAmount: 50000,
-        percentage: 50,
-      })),
+      overallPercentage,
+      topPerformers: targetsWithProgress.slice(0, 2),
     }
 
     return {

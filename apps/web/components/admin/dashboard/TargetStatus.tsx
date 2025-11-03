@@ -28,8 +28,8 @@ export default function TargetStatus({ summary }: TargetStatusProps) {
       {summary.topPerformers.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs text-slate-500 uppercase font-medium mb-2">Top Performers</p>
-          {summary.topPerformers.map((performer) => (
-            <div key={performer.resellerId} className="flex items-center justify-between pb-2 border-b border-slate-100 last:border-0">
+          {summary.topPerformers.map((performer, idx) => (
+            <div key={performer.targetId || `${performer.resellerId}-${idx}`} className="flex items-center justify-between pb-2 border-b border-slate-100 last:border-0">
               <div className="flex-1">
                 <p className="text-sm font-medium text-slate-900">{performer.resellerName}</p>
                 <p className="text-xs text-slate-500">

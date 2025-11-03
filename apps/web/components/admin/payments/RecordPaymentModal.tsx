@@ -40,12 +40,16 @@ export default function RecordPaymentModal({
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [resellers, setResellers] = useState<Array<{ id: string; shop_name: string }>>([])
+  const [outstandingAmount, setOutstandingAmount] = useState<number>(initialAmountDue || 0)
+  const [fetchingOutstanding, setFetchingOutstanding] = useState(false)
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    setError,
+    clearErrors,
     formState: { errors },
   } = useForm<PaymentFormData>({
     resolver: zodResolver(paymentSchema),
@@ -58,6 +62,9 @@ export default function RecordPaymentModal({
     },
   })
 
+  const selectedResellerId = watch('reseller_id')
+  const enteredAmount = watch('amount')
+
   // Fetch resellers on mount
   useEffect(() => {
     const fetchResellers = async () => {
@@ -67,7 +74,49 @@ export default function RecordPaymentModal({
     fetchResellers()
   }, [])
 
+  // Fetch outstanding amount when reseller changes
+  useEffect(() => {
+    const fetchOutstanding = async () => {
+      if (!selectedResellerId) {
+        setOutstandingAmount(0)
+        return
+      }
+
+      setFetchingOutstanding(true)
+      const supabase = supabaseBrowser()
+      const { data } = await supabase
+        .from('v_reseller_outstanding')
+        .select('outstanding')
+        .eq('reseller_id', selectedResellerId)
+        .maybeSingle()
+
+      const outstanding = Number(data?.outstanding || 0)
+      setOutstandingAmount(outstanding)
+      setFetchingOutstanding(false)
+    }
+
+    fetchOutstanding()
+  }, [selectedResellerId])
+
+  // Validate amount doesn't exceed outstanding
+  useEffect(() => {
+    if (enteredAmount && outstandingAmount > 0 && enteredAmount > outstandingAmount) {
+      setError('amount', {
+        type: 'manual',
+        message: `Amount cannot exceed outstanding balance of ₹${outstandingAmount.toLocaleString()}`,
+      })
+    } else {
+      clearErrors('amount')
+    }
+  }, [enteredAmount, outstandingAmount, setError, clearErrors])
+
   const onSubmit = async (data: PaymentFormData) => {
+    // Final validation before submit
+    if (outstandingAmount > 0 && data.amount > outstandingAmount) {
+      toast.error(`Amount cannot exceed outstanding balance of ₹${outstandingAmount.toLocaleString()}`)
+      return
+    }
+
     setLoading(true)
 
     const result = await recordPayment({
@@ -139,19 +188,28 @@ export default function RecordPaymentModal({
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Amount <span className="text-red-500">*</span>
             </label>
+            {outstandingAmount > 0 && (
+              <div className="mb-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm font-semibold text-blue-900">
+                  Outstanding Balance: ₹{outstandingAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-xs text-blue-700 mt-1">
+                  You can record payment up to this amount only
+                </p>
+              </div>
+            )}
+            {fetchingOutstanding && (
+              <p className="text-xs text-slate-500 mb-2">Fetching outstanding amount...</p>
+            )}
             <input
               type="number"
               step="0.01"
+              max={outstandingAmount > 0 ? outstandingAmount : undefined}
               {...register('amount', { valueAsNumber: true })}
               placeholder="Enter amount"
               className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
             />
             {errors.amount && <p className="text-red-500 text-xs mt-1">{errors.amount.message}</p>}
-            {initialAmountDue && initialAmountDue > 0 && (
-              <p className="text-xs text-slate-500 mt-1">
-                Outstanding balance: ₹{initialAmountDue.toLocaleString()}
-              </p>
-            )}
           </div>
 
           {/* Payment Method */}

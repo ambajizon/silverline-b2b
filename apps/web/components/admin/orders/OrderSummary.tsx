@@ -1,5 +1,10 @@
+'use client'
+
+import { useState } from 'react'
 import { OrderItem } from '@/types/orders'
 import { formatCurrency, formatWeight } from '@/lib/pricing'
+import { updateOrderStatus } from '@/app/(admin)/admin/orders/actions'
+import { useRouter } from 'next/navigation'
 
 interface OrderSummaryProps {
   order: any
@@ -16,18 +21,61 @@ const statusColors: Record<string, string> = {
   cancelled: 'bg-slate-100 text-slate-700',
 }
 
+const statusOptions = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'accepted', label: 'Accepted' },
+  { value: 'in_making', label: 'In Making' },
+  { value: 'dispatched', label: 'Dispatched' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'cancelled', label: 'Cancelled' },
+]
+
 export default function OrderSummary({ order, items }: OrderSummaryProps) {
+  const router = useRouter()
+  const [updating, setUpdating] = useState(false)
+  const [currentStatus, setCurrentStatus] = useState(order.status)
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (newStatus === currentStatus) return
+    
+    setUpdating(true)
+    const result = await updateOrderStatus(order.id, newStatus as any)
+    
+    if (result.success) {
+      setCurrentStatus(newStatus)
+      router.refresh()
+    } else {
+      alert(result.error || 'Failed to update status')
+    }
+    setUpdating(false)
+  }
+
   return (
     <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
       <div className="flex items-start justify-between mb-4">
         <h2 className="text-lg font-semibold text-slate-900">Order Summary</h2>
-        <span
-          className={`px-3 py-1 rounded-full text-sm font-medium ${
-            statusColors[order.status] || 'bg-slate-100 text-slate-700'
-          }`}
-        >
-          {order.status.replace('_', ' ')}
-        </span>
+        <div className="flex items-center gap-3">
+          <span
+            className={`px-3 py-1 rounded-full text-sm font-medium ${
+              statusColors[currentStatus] || 'bg-slate-100 text-slate-700'
+            }`}
+          >
+            {currentStatus.replace('_', ' ')}
+          </span>
+          <select
+            value={currentStatus}
+            onChange={(e) => handleStatusChange(e.target.value)}
+            disabled={updating}
+            className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          >
+            {statusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-6">

@@ -53,6 +53,7 @@ export interface RewardItem {
 }
 
 export interface TargetProgress {
+  targetId: string
   resellerId: string
   resellerName: string
   targetAmount: number

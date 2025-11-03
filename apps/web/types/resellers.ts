@@ -16,6 +16,9 @@ export interface Reseller {
 }
 
 export interface ResellerWithProfile extends Reseller {
+  city?: string
+  state?: string
+  pincode?: string
   email?: string
   credit_limit?: number
   discount_percent?: number
@@ -78,6 +81,10 @@ export interface Target {
   created_at: string
   updated_at: string
   current_progress?: number
+  is_qualified?: boolean
+  reward_status?: string
+  reward_approved_date?: string
+  reward_delivered_date?: string
 }
 
 export interface RecordPaymentInput {

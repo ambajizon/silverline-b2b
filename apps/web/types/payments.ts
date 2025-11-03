@@ -15,6 +15,9 @@ export interface Payment {
 }
 
 export interface PaymentWithDetails extends Payment {
+  invoiced: number
+  received: number
+  outstanding: number
   reseller_name: string
   order_number: string
   invoice_date: string
@@ -24,6 +27,8 @@ export interface PaymentWithDetails extends Payment {
 
 export interface PaymentStats {
   total_outstanding: number
+  total_received: number
+  total_invoiced: number
   paid_this_month: number
   overdue: number
   aging_90_plus: number

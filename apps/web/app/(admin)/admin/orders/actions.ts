@@ -6,6 +6,27 @@ import { isAdmin } from '@/lib/roles'
 import { OrderStatus } from '@/types/orders'
 import type { PaymentStatus } from '@/types/order'
 
+export async function updateOrderNotes(
+  orderId: string,
+  notes: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await supabaseServer()
+    
+    const { error } = await supabase
+      .from('orders')
+      .update({ notes })
+      .eq('id', orderId)
+    
+    if (error) throw error
+    
+    revalidatePath(`/admin/orders/${orderId}`)
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to update notes' }
+  }
+}
+
 export async function updateOrderStatus(
   orderId: string,
   status: OrderStatus,

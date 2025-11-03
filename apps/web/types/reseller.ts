@@ -13,6 +13,10 @@ export type TargetSummary = {
   reward: string | null
   progress_pct: number
   days_left: number
+  is_qualified?: boolean
+  reward_status?: string
+  reward_approved_date?: string | null
+  reward_delivered_date?: string | null
 }
 
 export type OrderRow = {
@@ -120,10 +124,16 @@ export type CartItem = {
   weightKg: number       // total weight for this product (kg)
   price: number          // DEPRECATED: use total instead
   total: number          // total price for this product
+  preTaxTotal: number    // price before tax
   tunch: number
   labor: number
   offer: number
   segments?: WeightSegment[]
+  silverRate: number
+  deductionPct: number
+  laborPerKg: number
+  offerDiscount: number
+  hsnCode: string
 }
 
 export type Cart = {
@@ -149,6 +159,7 @@ export type OrderDetail = {
   order_number: string
   created_at: string
   status: OrderStatus
+  payment_status: string
   total_amount: number
   total_weight: number
   shipping_address: string

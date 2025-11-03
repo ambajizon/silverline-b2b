@@ -155,7 +155,7 @@ export default function TargetDetailView({ target: initialTarget }: TargetDetail
                 <p className="font-medium text-slate-900">
                   {target.reward_value
                     ? target.reward_type === 'cashback'
-                      ? formatCurrency(target.reward_value)
+                      ? formatCurrency(Number(target.reward_value))
                       : `${target.reward_value}%`
                     : 'None'}
                 </p>
@@ -197,6 +197,10 @@ export default function TargetDetailView({ target: initialTarget }: TargetDetail
           <TargetProgressTimeline
             progress={target.progress_history || []}
             onAddProgress={() => setShowAddProgress(true)}
+            targetId={target.id}
+            resellerId={target.reseller_id || ''}
+            targetCreatedAt={target.created_at}
+            targetDeadline={target.deadline}
           />
         </div>
 
@@ -223,7 +227,7 @@ export default function TargetDetailView({ target: initialTarget }: TargetDetail
                 <p className="text-sm font-medium text-green-900">Expected Reward</p>
                 <p className="text-2xl font-bold text-green-600 mt-1">
                   {target.reward_type === 'cashback'
-                    ? formatCurrency(target.reward_value)
+                    ? formatCurrency(Number(target.reward_value))
                     : `${target.reward_value}% ${target.reward_type}`}
                 </p>
               </div>

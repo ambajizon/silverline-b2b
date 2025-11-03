@@ -152,10 +152,32 @@ export async function getOrderDetail(orderId: string): Promise<OrderDetail> {
   
   if (error) throw error
 
+  // Calculate payment status from payments table
+  const { data: payments } = await sb
+    .from('payments')
+    .select('status, amount')
+    .eq('reseller_id', res.id)
+    .eq('order_id', o.id)
+
+  let paymentStatus = 'unpaid'
+  if (payments && payments.length > 0) {
+    const totalPaid = payments
+      .filter(p => p.status === 'received')
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0)
+    const orderTotal = Number(o.total_price || 0)
+    
+    if (totalPaid >= orderTotal) {
+      paymentStatus = 'paid'
+    } else if (totalPaid > 0) {
+      paymentStatus = 'partial'
+    }
+  }
+
   return {
     id: o.id,
     created_at: o.created_at,
     status: o.status as OrderStatus,
+    payment_status: paymentStatus,
     order_number: (o as any).order_code ?? o.id.slice(0,6).toUpperCase(),
     total_amount: Number((o as any).total_price ?? 0),
     total_weight: Number((o as any).total_weight_kg ?? 0),

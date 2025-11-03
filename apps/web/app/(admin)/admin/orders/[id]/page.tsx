@@ -7,6 +7,7 @@ import OrderItems from '@/components/admin/orders/OrderItems'
 import ShippingDetails from '@/components/admin/orders/ShippingDetails'
 import InvoiceButton from '@/components/admin/orders/InvoiceButton'
 import PrintMOT from '@/components/admin/orders/PrintKOT'
+import EditableOrderNotes from '@/components/admin/orders/EditableOrderNotes'
 
 async function fetchOrderDetail(orderId: string) {
   const supabase = await supabaseServer()
@@ -146,14 +147,8 @@ export default async function OrderDetailPage({
 
         {/* Right Column - 1/3 */}
         <div className="space-y-6">
-          {/* Shipping info stored in notes field */}
-          <div className="bg-white rounded-lg border border-slate-200 p-6">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Order Notes</h3>
-            <div className="text-sm text-slate-600 whitespace-pre-wrap">
-              {order.notes || 'No notes available'}
-            </div>
-          </div>
-                    <ShippingDetails 
+          <EditableOrderNotes orderId={order.id} initialNotes={order.notes} />
+          <ShippingDetails 
             orderId={order.id}
             status={order.status}
             shipName={order.reseller?.contact_name}

@@ -48,7 +48,7 @@ export default function ChangePasswordModal({ isOpen, onClose }: ChangePasswordM
 
     setLoading(true)
 
-    const result = await changePassword(formData.newPassword)
+    const result = await changePassword(formData.currentPassword, formData.newPassword)
 
     if (result.success) {
       setSuccess(true)

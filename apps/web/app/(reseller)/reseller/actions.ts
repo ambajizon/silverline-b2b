@@ -129,12 +129,24 @@ export async function getRateTrend7d(): Promise<RatePoint[]> {
   return Array.from(byDay.values())
 }
 
-/** 3) active target for this reseller (nearest deadline) */
+/** 3) active target for this reseller (nearest deadline) with payment-aware progress */
 export async function getActiveTarget(resellerId: string): Promise<TargetSummary | null> {
   const supabase = await supabaseServer()
   const { data: t } = await supabase
     .from('targets')
-    .select('id, name, goal, reward_value, deadline, status')
+    .select(`
+      id, 
+      name, 
+      goal, 
+      type,
+      reward_value, 
+      deadline, 
+      status,
+      created_at,
+      reward_status,
+      reward_approved_date,
+      reward_delivered_date
+    `)
     .eq('reseller_id', resellerId)
     .eq('status', 'active')
     .order('deadline', { ascending: true })
@@ -143,16 +155,49 @@ export async function getActiveTarget(resellerId: string): Promise<TargetSummary
 
   if (!t) return null
 
-  const { data: prog } = await supabase
-    .from('target_progress')
-    .select('current_value')
-    .eq('target_id', t.id)
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  // Calculate payment-aware progress
+  let currentProgress = 0
+  
+  // Get delivered orders within target period
+  const { data: deliveredOrders } = await supabase
+    .from('orders')
+    .select('id, total_weight_kg, total_price, created_at')
+    .eq('reseller_id', resellerId)
+    .eq('status', 'delivered')
+  
+  if (deliveredOrders && deliveredOrders.length > 0) {
+    // Check reseller's overall outstanding
+    const { data: outstandingData } = await supabase
+      .from('v_reseller_outstanding')
+      .select('outstanding')
+      .eq('reseller_id', resellerId)
+      .maybeSingle()
+    
+    const resellerOutstanding = Number(outstandingData?.outstanding || 0)
+    
+    // Filter orders within target period
+    const ordersInPeriod = deliveredOrders.filter((order: any) => {
+      const orderDate = new Date(order.created_at)
+      const targetStart = new Date(t.created_at)
+      const targetEnd = new Date(t.deadline)
+      return orderDate >= targetStart && orderDate <= targetEnd
+    })
+    
+    // If no outstanding, count all delivered orders in period
+    if (resellerOutstanding <= 0 && ordersInPeriod.length > 0) {
+      if (t.type === 'weight') {
+        currentProgress = ordersInPeriod.reduce((sum: number, o: any) => sum + Number(o.total_weight_kg || 0), 0)
+      } else if (t.type === 'purchase_value' || t.type === 'revenue') {
+        currentProgress = ordersInPeriod.reduce((sum: number, o: any) => sum + Number(o.total_price || 0), 0)
+      } else if (t.type === 'order_count') {
+        currentProgress = ordersInPeriod.length
+      }
+    }
+  }
 
-  const pct = t.goal ? Math.min(100, Math.round(((prog?.current_value ?? 0) / t.goal) * 100)) : 0
+  const pct = t.goal ? Math.min(100, Math.round((currentProgress / t.goal) * 100)) : 0
   const daysLeft = Math.max(0, Math.ceil((+new Date(t.deadline) - Date.now()) / (1000 * 60 * 60 * 24)))
+  const isQualified = currentProgress >= t.goal
 
   return {
     id: t.id,
@@ -161,6 +206,10 @@ export async function getActiveTarget(resellerId: string): Promise<TargetSummary
     reward: t.reward_value ? `₹${new Intl.NumberFormat('en-IN').format(Number(t.reward_value))} Bonus` : null,
     progress_pct: pct,
     days_left: daysLeft,
+    is_qualified: isQualified,
+    reward_status: t.reward_status || 'pending',
+    reward_approved_date: t.reward_approved_date,
+    reward_delivered_date: t.reward_delivered_date,
   }
 }
 

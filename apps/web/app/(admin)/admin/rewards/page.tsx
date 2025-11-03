@@ -1,7 +1,6 @@
-import { getClaimedRewards, getRewardsCatalog } from './actions'
-import { Gift, Package, TrendingUp, CheckCircle } from 'lucide-react'
-import RewardsTable from '@/components/admin/rewards/RewardsTable'
-import RewardsCatalog from '@/components/admin/rewards/RewardsCatalog'
+import { getQualifiedResellers, getRewardsHistory } from './actions'
+import { Trophy, Gift, CheckCircle, Truck } from 'lucide-react'
+import QualifiedResellersTable from '@/components/admin/rewards/QualifiedResellersTable'
 
 export default async function RewardsPage({
   searchParams,
@@ -12,27 +11,26 @@ export default async function RewardsPage({
 
   const filters = {
     status: sp.status as string,
-    reseller_id: sp.reseller_id as string,
     page: Number(sp.page) || 1,
   }
 
-  const [claimedResult, catalogResult] = await Promise.all([
-    getClaimedRewards(filters),
-    getRewardsCatalog(),
+  const [qualifiedResult, historyResult] = await Promise.all([
+    getQualifiedResellers(filters),
+    getRewardsHistory(),
   ])
 
-  if (!claimedResult.ok) {
+  if (!qualifiedResult.ok) {
     return (
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-          Error loading rewards: {claimedResult.error}
+          Error loading rewards: {qualifiedResult.error}
         </div>
       </div>
     )
   }
 
-  const { rewards = [], total = 0, summary } = claimedResult.data || {}
-  const catalog = catalogResult.ok ? catalogResult.data : []
+  const { qualified = [], total = 0 } = qualifiedResult.data || {}
+  const history = historyResult.ok ? historyResult.data : []
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -51,27 +49,31 @@ export default async function RewardsPage({
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-lg p-4 shadow-sm border border-slate-200">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-              <Gift className="h-5 w-5 text-blue-600" />
+            <div className="h-10 w-10 rounded-lg bg-yellow-100 flex items-center justify-center">
+              <Trophy className="h-5 w-5 text-yellow-600" />
             </div>
             <div>
-              <p className="text-xs text-slate-600">Total Claims</p>
-              <p className="text-2xl font-bold text-slate-900">{summary?.total || 0}</p>
+              <p className="text-xs text-slate-600">Qualified Resellers</p>
+              <p className="text-2xl font-bold text-slate-900">
+                {qualified.filter((r: any) => r.reward_status === 'pending').length}
+              </p>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-lg p-4 shadow-sm border border-slate-200">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-orange-100 flex items-center justify-center">
-              <Package className="h-5 w-5 text-orange-600" />
+            <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
+              <Gift className="h-5 w-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-xs text-slate-600">Pending</p>
-              <p className="text-2xl font-bold text-slate-900">{summary?.pending || 0}</p>
+              <p className="text-xs text-slate-600">Approved</p>
+              <p className="text-2xl font-bold text-slate-900">
+                {qualified.filter((r: any) => r.reward_status === 'approved').length}
+              </p>
             </div>
           </div>
         </div>
@@ -83,20 +85,8 @@ export default async function RewardsPage({
             </div>
             <div>
               <p className="text-xs text-slate-600">Delivered</p>
-              <p className="text-2xl font-bold text-slate-900">{summary?.delivered || 0}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-slate-200">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
-              <TrendingUp className="h-5 w-5 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-600">Total Value</p>
               <p className="text-2xl font-bold text-slate-900">
-                {formatCurrency(summary?.totalValue || 0)}
+                {qualified.filter((r: any) => r.reward_status === 'delivered').length}
               </p>
             </div>
           </div>
@@ -114,17 +104,17 @@ export default async function RewardsPage({
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
-            All
+            All Qualified
           </a>
           <a
             href="/admin/rewards?status=pending"
             className={`px-4 py-2 rounded-md text-sm font-medium ${
               filters.status === 'pending'
-                ? 'bg-orange-600 text-white'
+                ? 'bg-yellow-600 text-white'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
-            Pending
+            Awaiting Approval
           </a>
           <a
             href="/admin/rewards?status=approved"
@@ -149,22 +139,49 @@ export default async function RewardsPage({
         </div>
       </div>
 
-      {/* Claimed Rewards Table */}
+      {/* Qualified Resellers Table */}
       <div className="bg-white rounded-lg shadow-sm border border-slate-200">
         <div className="p-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">Claimed Rewards</h2>
-          <p className="text-xs text-slate-600">{total} rewards claimed</p>
+          <h2 className="text-lg font-semibold text-slate-900">Qualified Resellers</h2>
+          <p className="text-xs text-slate-600">{total} resellers qualified for rewards</p>
         </div>
-        <RewardsTable rewards={rewards} />
+        <QualifiedResellersTable qualified={qualified} />
       </div>
 
-      {/* Rewards Catalog */}
+      {/* Winners History */}
       <div className="bg-white rounded-lg shadow-sm border border-slate-200">
         <div className="p-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">Rewards Catalog</h2>
-          <p className="text-xs text-slate-600">Available prizes for achievers</p>
+          <h2 className="text-lg font-semibold text-slate-900">🏆 Rewards History - All Winners</h2>
+          <p className="text-xs text-slate-600">{history.length} rewards delivered</p>
         </div>
-        <RewardsCatalog catalog={catalog} />
+        <div className="divide-y divide-slate-100">
+          {history.length === 0 ? (
+            <div className="p-12 text-center text-slate-600">
+              No rewards delivered yet
+            </div>
+          ) : (
+            history.map((item: any) => (
+              <div key={item.target_id} className="p-4 hover:bg-slate-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                      <Trophy className="h-6 w-6 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{item.reseller_name}</p>
+                      <p className="text-xs text-slate-600">{item.target_name}</p>
+                      <p className="text-xs text-slate-500">Goal: {item.goal_display} | Achieved: {item.achieved_display}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-slate-600">Delivered on</p>
+                    <p className="text-sm font-medium text-slate-900">{new Date(item.delivered_date).toLocaleDateString('en-IN')}</p>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   )

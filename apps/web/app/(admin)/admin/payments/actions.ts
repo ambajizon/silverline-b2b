@@ -172,14 +172,28 @@ export async function getPaymentsTable(filters: PaymentFilters): Promise<ActionR
     if (error) throw error
 
     // Transform to payment rows
-    const payments = (resellers || []).map((r: any) => ({
-      reseller_id: r.reseller_id,
-      reseller_name: r.shop_name,
-      invoiced: Number(r.invoiced || 0),
-      received: Number(r.received || 0),
-      outstanding: Number(r.outstanding || 0),
-      status: Number(r.outstanding) === 0 ? 'paid' : Number(r.outstanding) > 0 ? 'pending' : 'overdue',
-    }))
+    const payments = (resellers || []).map((r: any) => {
+      const outstanding = Number(r.outstanding || 0)
+      let status: 'paid' | 'pending' | 'overdue' = 'pending'
+      
+      // If outstanding is 0 or negative (overpaid), mark as paid
+      if (outstanding <= 0) {
+        status = 'paid'
+      } else {
+        // Check if it's overdue (more than 30 days old)
+        // For now, we'll keep it as pending unless we have aging data
+        status = 'pending'
+      }
+      
+      return {
+        reseller_id: r.reseller_id,
+        reseller_name: r.shop_name,
+        invoiced: Number(r.invoiced || 0),
+        received: Number(r.received || 0),
+        outstanding: outstanding,
+        status,
+      }
+    })
 
     return {
       ok: true,

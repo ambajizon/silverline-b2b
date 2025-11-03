@@ -62,7 +62,6 @@ export default function OrdersTable({ orders, total, currentPage }: OrdersTableP
               <th className="text-right py-3 px-4 text-xs font-medium text-slate-700 uppercase">Total</th>
               <th className="text-right py-3 px-4 text-xs font-medium text-slate-700 uppercase">Weight</th>
               <th className="text-left py-3 px-4 text-xs font-medium text-slate-700 uppercase">Status</th>
-              <th className="text-left py-3 px-4 text-xs font-medium text-slate-700 uppercase">Payment Status</th>
               <th className="text-center py-3 px-4 text-xs font-medium text-slate-700 uppercase">Actions</th>
             </tr>
           </thead>
@@ -95,19 +94,6 @@ export default function OrdersTable({ orders, total, currentPage }: OrdersTableP
                     }`}
                   >
                     {order.status.replace('_', ' ')}
-                  </span>
-                </td>
-                <td className="py-3 px-4">
-                  <span
-                    className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                      (order as any).payment_status === 'paid'
-                        ? 'bg-green-100 text-green-700'
-                        : (order as any).payment_status === 'partial'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-red-100 text-red-700'
-                    }`}
-                  >
-                    {(order as any).payment_status || 'unpaid'}
                   </span>
                 </td>
                 <td className="py-3 px-4">

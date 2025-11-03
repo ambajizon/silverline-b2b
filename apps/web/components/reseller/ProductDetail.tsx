@@ -27,6 +27,7 @@ export default function ProductDetail({ product, silverRate }: ProductDetailProp
   const [breakdown, setBreakdown] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [addingToCart, setAddingToCart] = useState(false)
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0)
 
   // Calculate total weight from segments
   const totalWeightKg = selectedSegments.reduce((sum, seg) => sum + (seg.weight_kg || 0), 0)
@@ -91,9 +92,15 @@ export default function ProductDetail({ product, silverRate }: ProductDetailProp
         weightKg: totalWeightKg,
         price: breakdown.total_price,  // backward compatibility
         total: breakdown.total_price,   // new field
+        preTaxTotal: breakdown.taxable_amount || breakdown.total_price,
         tunch: product.tunch_percentage,
         labor: product.labor_per_kg,
         offer: breakdown.offer_discount,
+        silverRate: breakdown.silver_rate || 0,
+        deductionPct: product.tunch_percentage,
+        laborPerKg: product.labor_per_kg,
+        offerDiscount: breakdown.offer_discount || 0,
+        hsnCode: product.hsn_code || '',
         segments: selectedSegments.map(s => ({
           range: s.range,
           weight_kg: s.weight_kg
@@ -133,7 +140,7 @@ export default function ProductDetail({ product, silverRate }: ProductDetailProp
         <div className="aspect-square bg-slate-100 relative">
           {product.images.length > 0 ? (
             <Image
-              src={toPublicUrl(product.images[0])}
+              src={toPublicUrl(product.images[selectedImageIndex])}
               alt={product.name}
               fill
               className="object-cover"
@@ -157,10 +164,18 @@ export default function ProductDetail({ product, silverRate }: ProductDetailProp
         {/* Thumbnail Navigation */}
         {product.images.length > 1 && (
           <div className="flex gap-2 p-3 overflow-x-auto">
-            {product.images.slice(0, 4).map((img, idx) => (
-              <div key={idx} className="w-16 h-16 rounded border border-slate-200 overflow-hidden flex-shrink-0 relative">
+            {product.images.map((img, idx) => (
+              <button
+                key={idx}
+                onClick={() => setSelectedImageIndex(idx)}
+                className={`w-16 h-16 rounded border-2 overflow-hidden flex-shrink-0 relative transition-all ${
+                  selectedImageIndex === idx 
+                    ? 'border-blue-600 ring-2 ring-blue-200' 
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
                 <Image src={toPublicUrl(img)} alt="" fill className="object-cover" sizes="64px" unoptimized />
-              </div>
+              </button>
             ))}
           </div>
         )}

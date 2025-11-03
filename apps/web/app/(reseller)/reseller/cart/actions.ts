@@ -15,12 +15,12 @@ type CheckoutItem = {
   silverRate?: number
   gstRate?: number
   productName?: string
-  productImage?: string
+  productImage?: string | null
   hsnCode?: string
   deductionPct?: number
   laborPerKg?: number
   offerDiscount?: number
-  segments?: Array<{ label: string; weightKg: number }>
+  segments?: Array<{ range: { min: number; max: number }; weight_kg: number }>
 }
 
 type CheckoutPayload = {
@@ -265,17 +265,37 @@ export async function getCart(): Promise<DBCartItem[]> {
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
-  return (data ?? []).map((row: any) => ({
-    id: row.id,
-    product_id: row.product_id,
-    product_name: row.products?.name ?? 'Product',
-    product_image: Array.isArray(row.products?.images) ? row.products.images[0] ?? null : null,
-    weight_kg: Number(row.weight_kg ?? 0),
-    weight_ranges: row.weight_ranges ?? null,
-    price_snapshot: row.price_snapshot,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  }))
+  return (data ?? []).map((row: any) => {
+    const snapshot = row.price_snapshot || {}
+    const productImage = Array.isArray(row.products?.images) ? row.products.images[0] ?? null : null
+    const productName = row.products?.name ?? 'Product'
+    const weightKg = Number(row.weight_kg ?? 0)
+    
+    return {
+      id: row.id,
+      product_id: row.product_id,
+      productId: row.product_id,
+      product_name: productName,
+      name: productName,
+      product_image: productImage,
+      image: productImage,
+      weight_kg: weightKg,
+      weightKg: weightKg,
+      weight_ranges: row.weight_ranges ?? null,
+      segments: row.weight_ranges ?? null,
+      price_snapshot: row.price_snapshot,
+      price: snapshot.base_price || 0,
+      total: snapshot.total || 0,
+      preTaxTotal: snapshot.preTaxTotal || snapshot.subtotal || snapshot.total || 0,
+      silverRate: snapshot.silver_rate || 0,
+      deductionPct: snapshot.deduction_pct || 0,
+      laborPerKg: snapshot.labor_per_kg || 0,
+      offerDiscount: snapshot.offer_discount || 0,
+      hsnCode: snapshot.hsn_code || '',
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }
+  })
 }
 
 export async function updateCartItem(cartItemId: string, weight_kg: number): Promise<ActionResult> {

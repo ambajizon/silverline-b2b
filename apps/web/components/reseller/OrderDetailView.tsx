@@ -53,9 +53,15 @@ export default function OrderDetailView({ order }: OrderDetailViewProps) {
         weightKg: item.weight_kg * item.quantity,
         price: item.line_total,
         total: item.line_total,
+        preTaxTotal: item.line_total,
         tunch: item.tunch_percentage,
         labor: item.labor_per_kg,
         offer: 0,
+        silverRate: 0,
+        deductionPct: item.tunch_percentage,
+        laborPerKg: item.labor_per_kg,
+        offerDiscount: 0,
+        hsnCode: '',
       })
     })
     
@@ -92,13 +98,26 @@ export default function OrderDetailView({ order }: OrderDetailViewProps) {
               })}
             </p>
           </div>
-          <span
-            className={`text-xs px-3 py-1 rounded-full font-medium border ${
-              statusColors[order.status as keyof typeof statusColors] ?? statusColors.pending
-            }`}
-          >
-            {statusLabels[order.status as keyof typeof statusLabels] ?? 'Pending'}
-          </span>
+          <div className="flex flex-col items-end gap-1">
+            <span
+              className={`text-xs px-3 py-1 rounded-full font-medium border ${
+                statusColors[order.status as keyof typeof statusColors] ?? statusColors.pending
+              }`}
+            >
+              {statusLabels[order.status as keyof typeof statusLabels] ?? 'Pending'}
+            </span>
+            <span
+              className={`text-xs px-3 py-1 rounded-full font-medium border ${
+                order.payment_status === 'paid'
+                  ? 'bg-green-50 text-green-700 border-green-200'
+                  : order.payment_status === 'partial'
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : 'bg-red-50 text-red-700 border-red-200'
+              }`}
+            >
+              {order.payment_status === 'paid' ? 'Paid' : order.payment_status === 'partial' ? 'Partial Payment' : 'Unpaid'}
+            </span>
+          </div>
         </div>
 
         {/* Order Pipeline */}

@@ -88,6 +88,66 @@ export async function getMyProfile(): Promise<ResellerProfile> {
   }
 }
 
+export async function updateAddress(input: {
+  address: string
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await supabaseServer()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'Not authenticated' }
+
+    // Update just the address field
+    const { error } = await supabase
+      .from('resellers')
+      .update({
+        address: input.address,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', user.id)
+
+    if (error) {
+      return { success: false, error: error.message }
+    }
+
+    revalidatePath('/reseller/account')
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: 'Failed to update address' }
+  }
+}
+
+export async function updateProfile(input: {
+  shop_name: string
+  contact_name?: string | null
+  phone?: string | null
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await supabaseServer()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'Not authenticated' }
+
+    // Update just profile fields
+    const { error } = await supabase
+      .from('resellers')
+      .update({
+        shop_name: input.shop_name,
+        contact_name: input.contact_name ?? null,
+        phone: input.phone ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', user.id)
+
+    if (error) {
+      return { success: false, error: error.message }
+    }
+
+    revalidatePath('/reseller/account')
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: 'Failed to update profile' }
+  }
+}
+
 export async function updateResellerInfo(input: {
   shop_name: string
   contact_name?: string | null
