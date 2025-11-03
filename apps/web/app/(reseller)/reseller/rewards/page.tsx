@@ -48,7 +48,7 @@ export default async function ResellerRewardsPage() {
             <div>
               <p className="text-xs text-blue-700 font-medium">Rewards Received</p>
               <p className="text-2xl font-bold text-blue-900">
-                {qualified.filter(q => q.reward_status === 'delivered').length}
+                {qualified.filter((q: any) => q.reward_status === 'delivered').length}
               </p>
             </div>
           </div>
