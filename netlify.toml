@@ -1,0 +1,19 @@
+[build]
+  command = "cd apps/web && npm install && npm run build"
+  publish = "apps/web/.next"
+  base = "/"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_FLAGS = "--legacy-peer-deps"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[functions]
+  directory = "apps/web/.netlify/functions"
