@@ -21,6 +21,51 @@ export default function NotificationBell() {
 
   useEffect(() => {
     fetchNotifications()
+    
+    // Set up real-time subscription for new notifications
+    const supabase = supabaseBrowser()
+    let subscription: any
+    
+    const setupSubscription = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      
+      subscription = supabase
+        .channel('notifications')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`
+          },
+          () => {
+            fetchNotifications()
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`
+          },
+          () => {
+            fetchNotifications()
+          }
+        )
+        .subscribe()
+    }
+    
+    setupSubscription()
+    
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe()
+      }
+    }
   }, [])
 
   const fetchNotifications = async () => {

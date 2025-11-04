@@ -47,6 +47,13 @@ export async function updateOrderStatus(
     
     if (!isAdmin(profile?.role)) return { success: false, error: 'Forbidden' }
 
+    // Get order details first
+    const { data: order } = await supabase
+      .from('orders')
+      .select('reseller_id, order_code, resellers!inner(user_id)')
+      .eq('id', orderId)
+      .single()
+
     // Update order
     const updateData: any = { 
       status, 
@@ -61,8 +68,31 @@ export async function updateOrderStatus(
 
     if (error) throw error
 
+    // Create notification for reseller
+    if (order?.resellers && 'user_id' in order.resellers) {
+      const statusMessages: Partial<Record<OrderStatus, string>> = {
+        pending: 'Your order is pending review',
+        accepted: 'Your order has been accepted',
+        in_making: 'Your order is being made',
+        dispatched: 'Your order has been dispatched',
+        delivered: 'Your order has been delivered',
+        cancelled: 'Your order has been cancelled',
+        rejected: 'Your order has been rejected',
+      }
+
+      await supabase.from('notifications').insert({
+        user_id: order.resellers.user_id,
+        type: 'order',
+        title: `Order ${status.replace('_', ' ').charAt(0).toUpperCase() + status.replace('_', ' ').slice(1)}`,
+        message: `${statusMessages[status]} - Order #${order.order_code}`,
+        related_id: orderId,
+        read: false,
+      })
+    }
+
     revalidatePath('/admin/orders')
     revalidatePath(`/admin/orders/${orderId}`)
+    revalidatePath('/reseller/orders')
     
     return { success: true }
   } catch (error: any) {
