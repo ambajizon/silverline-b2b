@@ -26,7 +26,7 @@ export async function POST(req: Request) {
       email: parsed.email,
       password: parsed.password,
       email_confirm: false,
-      user_metadata: { role: 'pending' },
+      user_metadata: { role: 'reseller' },
     })
     if (createErr) throw createErr
     const user = userData.user
@@ -34,11 +34,15 @@ export async function POST(req: Request) {
 
     const userId = user.id
 
-    // 2) Insert profile row (role = pending)
-    const { error: profileErr } = await admin.from('profiles').insert({ id: userId, email: parsed.email, role: 'pending' })
+    // 2) Insert profile row (role = reseller, auto-approved)
+    const { error: profileErr } = await admin.from('profiles').insert({ 
+      id: userId, 
+      email: parsed.email, 
+      role: 'reseller' 
+    })
     if (profileErr && profileErr.code !== '23505') throw profileErr // ignore conflict if exists
 
-    // 3) Insert reseller row
+    // 3) Insert reseller row (status = approved, auto-approved)
     const { error: resellerErr } = await admin.from('resellers').insert({
       user_id: userId,
       shop_name: parsed.shop_name,
@@ -48,7 +52,7 @@ export async function POST(req: Request) {
       city: parsed.city ?? null,
       state: parsed.state ?? null,
       pincode: parsed.pincode ?? null,
-      status: 'pending',
+      status: 'approved',
     })
     if (resellerErr) throw resellerErr
 
